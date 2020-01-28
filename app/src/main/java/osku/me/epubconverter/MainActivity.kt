@@ -42,6 +42,12 @@ class MainActivity : AppCompatActivity() {
     val novelList = mutableListOf<NovelInfo>()
     val selectedNovels: MutableList<Boolean> = mutableListOf<Boolean>()
 
+    val bom = byteArrayOf(0xef.toByte(), 0xbb.toByte(), 0xbf.toByte())
+    val header = bom + """<?xml version='1.0' encoding='utf-8'?>
+                        <html xmlns="http://www.w3.org/1999/xhtml">
+                        <body>""".toByteArray()
+    val footer = """</body></html>""".toByteArray()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -71,10 +77,14 @@ class MainActivity : AppCompatActivity() {
             if (progressbar.visibility == View.INVISIBLE)
                 GlobalScope.async {
                     //                    buildEPubWithPermissionCheck()
-                    selectedNovels.map {
-                        if (it == true)
-                            buildEPubWithPermissionCheck(novelList[selectedNovels.indexOf(it)])
-                    }
+
+                    for(index in 0 until selectedNovels.size)
+                        if(selectedNovels[index] == true)
+                            buildEPubWithPermissionCheck(novelList[index])
+//                    selectedNovels.map {
+//                        if (it == true)
+//                            buildEPubWithPermissionCheck(novelList[selectedNovels.indexOf(it)])
+//                    }
                 }
             return true
         }
@@ -236,9 +246,12 @@ class MainActivity : AppCompatActivity() {
                         val cleaned =
                             Html.fromHtml(chapter.content, FROM_HTML_MODE_LEGACY).toString()
                         val final = cleaned.replace("\n", "<br/>")
+                        val finalBytes = final.toByteArray()
+
+                        val outputBytes = header + finalBytes + footer
                         book.addSection(
                             chapter_brief.name,
-                            Resource(final.toByteArray(), "chapter$count.html")
+                            Resource(outputBytes, "chapter$count.html")
                         )
                     } catch (io: IOException) {
                         io.printStackTrace()
