@@ -10,8 +10,9 @@ data class NovelInfo(
     val novelname: String,
     val host: String,
     val novelurl: String
-) {
+    ) {
     var chapterBriefList: Array<ChapterBrief>? = null
     var path: String? = null
     var dlContents: Int = 0
+    var selected: Boolean = false
 }

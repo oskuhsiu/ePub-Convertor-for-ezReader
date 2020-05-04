@@ -3,8 +3,10 @@ package osku.me.epubconverter
 import android.Manifest
 import android.os.Bundle
 import android.os.Environment
+import android.text.Editable
 import android.text.Html
 import android.text.Html.FROM_HTML_MODE_LEGACY
+import android.text.TextWatcher
 import android.view.*
 import android.widget.CheckBox
 import android.widget.TextView
@@ -39,8 +41,10 @@ import java.security.NoSuchAlgorithmException
 @RuntimePermissions
 class MainActivity : AppCompatActivity() {
 
-    val novelList = mutableListOf<NovelInfo>()
-    val selectedNovels: MutableList<Boolean> = mutableListOf<Boolean>()
+    val novelListAll = mutableListOf<NovelInfo>()
+    val novelListFiltered = mutableListOf<NovelInfo>()
+//    val selectedNovels: MutableList<Boolean> = mutableListOf<Boolean>()
+
 
     val bom = byteArrayOf(0xef.toByte(), 0xbb.toByte(), 0xbf.toByte())
     val header = bom + """<?xml version='1.0' encoding='utf-8'?>
@@ -53,6 +57,19 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         rvNovelList.adapter = novelListAdaper
         rvNovelList.layoutManager = LinearLayoutManager(this@MainActivity)
+
+        etFilter.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                filterList()
+            }
+
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+            }
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            }
+
+        })
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -78,9 +95,9 @@ class MainActivity : AppCompatActivity() {
                 GlobalScope.async {
                     //                    buildEPubWithPermissionCheck()
 
-                    for(index in 0 until selectedNovels.size)
-                        if(selectedNovels[index] == true)
-                            buildEPubWithPermissionCheck(novelList[index])
+                    for (index in 0 until novelListFiltered.size)
+                        if (novelListFiltered[index].selected == true)
+                            buildEPubWithPermissionCheck(novelListFiltered[index])
 //                    selectedNovels.map {
 //                        if (it == true)
 //                            buildEPubWithPermissionCheck(novelList[selectedNovels.indexOf(it)])
@@ -95,7 +112,8 @@ class MainActivity : AppCompatActivity() {
     @NeedsPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
     fun showChooser() {
 
-        novelList.clear()
+        novelListAll.clear()
+        novelListFiltered.clear()
 
         ChooserDialog(this@MainActivity)
             .withFilter(true, false, FileFilter {
@@ -103,8 +121,8 @@ class MainActivity : AppCompatActivity() {
                 if (path != null) {
                     if (path!!.contains("easy"))
                         true
-                    else if (path!!.contains(etFilter.text.toString()))
-                        true
+//                    else if (path!!.contains(etFilter.text.toString()))
+//                        true
                     else false
                 } else
                     false
@@ -127,15 +145,12 @@ class MainActivity : AppCompatActivity() {
                 val file = File(pathFile.absolutePath, it)
                 if (file.isDirectory) {
                     val ni = loadNovelInfo(file.absolutePath)
-                    ni?.let { novelList.add(ni) }
+                    ni?.let { novelListAll.add(ni) }
                 }
             }
         }
 
-        selectedNovels.clear()
-        for (obj in novelList)
-            selectedNovels.add(false)
-        novelListAdaper.notifyDataSetChanged()
+        filterList()
     }
 
     private fun loadNovelInfo(path: String): NovelInfo? {
@@ -304,6 +319,16 @@ class MainActivity : AppCompatActivity() {
         return ret
     }
 
+    private fun filterList() {
+
+        novelListFiltered.clear()
+        val toFilter = etFilter.text.toString()
+        for (novel in novelListAll)
+            if (novel.novelname.contains(toFilter))
+                novelListFiltered.add(novel)
+        novelListAdaper.notifyDataSetChanged()
+    }
+
 
     val novelListAdaper = object : RecyclerView.Adapter<ItemHolder>() {
 
@@ -315,18 +340,18 @@ class MainActivity : AppCompatActivity() {
             return viewHolder
         }
 
-        override fun getItemCount(): Int = novelList.size
+        override fun getItemCount(): Int = novelListFiltered.size
 
         override fun onBindViewHolder(holder: ItemHolder, position: Int) {
 
-            val novelInfo = novelList[position]
-            holder.cbSelection.isChecked = selectedNovels[position]
+            val novelInfo = novelListFiltered[position]
+            holder.cbSelection.isChecked = novelListFiltered[position].selected
             holder.txvTitle.text = novelInfo.novelname
             holder.txvTotal.text = "" + novelInfo.chapters_count
             holder.txvDL.text = "" + novelInfo.dlContents
 
             holder.itemView.setOnClickListener {
-                selectedNovels[position] = !selectedNovels[position]
+                novelListFiltered[position].selected = !novelListFiltered[position].selected
                 notifyDataSetChanged()
             }
         }
