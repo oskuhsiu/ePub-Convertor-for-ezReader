@@ -3,9 +3,15 @@
       xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+            android:id="@+id/action_output_txt"
+            android:orderInCategory="0"
+            android:title="2Txt"
+            app:showAsAction="always"/>
+
+    <item
             android:id="@+id/action_output"
             android:orderInCategory="0"
-            android:title="Output"
+            android:title="2Epub"
             app:showAsAction="always"/>
 
     <item

@@ -28,10 +28,7 @@ import osku.me.epubconverter.models.ChapterBrief
 import osku.me.epubconverter.models.NovelInfo
 import permissions.dispatcher.NeedsPermission
 import permissions.dispatcher.RuntimePermissions
-import java.io.File
-import java.io.FileFilter
-import java.io.FileOutputStream
-import java.io.IOException
+import java.io.*
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
@@ -98,6 +95,22 @@ class MainActivity : AppCompatActivity() {
                     for (index in 0 until novelListFiltered.size)
                         if (novelListFiltered[index].selected == true)
                             buildEPubWithPermissionCheck(novelListFiltered[index])
+//                    selectedNovels.map {
+//                        if (it == true)
+//                            buildEPubWithPermissionCheck(novelList[selectedNovels.indexOf(it)])
+//                    }
+                }
+            return true
+        }
+
+        if (id == R.id.action_output_txt) {
+            if (progressbar.visibility == View.INVISIBLE)
+                GlobalScope.async {
+                    //                    buildEPubWithPermissionCheck()
+
+                    for (index in 0 until novelListFiltered.size)
+                        if (novelListFiltered[index].selected == true)
+                            buildTxtFileWithPermissionCheck(novelListFiltered[index])
 //                    selectedNovels.map {
 //                        if (it == true)
 //                            buildEPubWithPermissionCheck(novelList[selectedNovels.indexOf(it)])
@@ -255,8 +268,7 @@ class MainActivity : AppCompatActivity() {
                     val content_filename = getMD5String(ref)
                     val content_path = Paths.get(novelPath, "dl_contents", content_filename)
                     try {
-                        val content =
-                            IOUtils.toString(content_path.toUri(), StandardCharsets.UTF_8)
+                        val content = IOUtils.toString(content_path.toUri(), StandardCharsets.UTF_8)
                         val chapter = Gson().fromJson(content, Chapter::class.java)
                         val cleaned =
                             Html.fromHtml(chapter.content, FROM_HTML_MODE_LEGACY).toString()
@@ -292,6 +304,98 @@ class MainActivity : AppCompatActivity() {
 
             val epubWriter = EpubWriter()
             epubWriter.write(book, FileOutputStream(full_output_path.toFile()))
+            runOnUiThread {
+                txvOutput.text = txvOutput.text.toString() + "\n" + filename + "done..."
+            }
+        } catch (all: Exception) {
+            all.printStackTrace()
+            runOnUiThread { txvOutput.text = txvOutput.text.toString() + "\n" + all.toString() }
+        } finally {
+            runOnUiThread { progressbar.visibility = View.INVISIBLE }
+        }
+    }
+
+    @NeedsPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    fun buildTxtFile(novelInfo: NovelInfo) {
+        var novelPath: String? = null
+        var chapterBriefList: Array<ChapterBrief>? = null
+
+        chapterBriefList = novelInfo!!.chapterBriefList
+        novelPath = novelInfo!!.path
+
+        if (novelInfo == null || chapterBriefList == null || novelPath == null)
+            return
+
+        var output_path = Paths.get(
+            Environment.getExternalStorageDirectory().absolutePath,
+            Environment.DIRECTORY_DOWNLOADS,
+            "EPubConverter"
+        )
+
+        output_path.toFile().mkdirs()
+        var filename: String = novelInfo!!.novelname
+
+        runOnUiThread { progressbar.visibility = View.VISIBLE }
+
+        val full_output_path = Paths.get(output_path.toString(), filename + ".txt").toFile()
+        try {
+            val writer = full_output_path.bufferedWriter()
+
+            var count: Int = 1
+            var chapter_count: Int = 1
+            for (chapter_brief in chapterBriefList!!) {
+
+                if (chapter_brief.url == null)
+                    continue
+
+                if (chapter_brief.url.length == 0) {
+                    continue
+                } else {
+                    val ref = chapter_brief.url.substring(chapter_brief.url.indexOf("/", 8))
+                    val content_filename = getMD5String(ref)
+                    val content_path = Paths.get(novelPath, "dl_contents", content_filename)
+                    try {
+                        val content = IOUtils.toString(content_path.toUri(), StandardCharsets.UTF_8)
+                        val chapter = Gson().fromJson(content, Chapter::class.java)
+                        val cleaned =
+                            Html.fromHtml(chapter.content, FROM_HTML_MODE_LEGACY).toString().trim()
+                                .replace("[\n]{2,}", "\n")
+                        val finalBytes = cleaned.toCharArray()//.toByteArray()
+
+                        val outputBytes = finalBytes
+                        //write chapter title
+                        writer.write(chapter_brief.name)
+                        writer.newLine()
+                        //write chapter content
+                        writer.write(outputBytes, 0, outputBytes.size)
+                        writer.newLine()
+                        //write line break
+                        writer.newLine()
+
+                    } catch (io: IOException) {
+                        io.printStackTrace()
+                        runOnUiThread {
+                            txvOutput.text =
+                                txvOutput.text.toString() + "\n" + "failed to find chapter: ${chapter_brief.name}"
+                            txvOutput.text = txvOutput.text.toString() + "\n" + io.toString()
+                        }
+                    } catch (others: java.lang.Exception) {
+                        others.printStackTrace()
+                        runOnUiThread {
+                            txvOutput.text =
+                                txvOutput.text.toString() + "\n" + others.toString()
+                        }
+                    }
+                }
+                count++
+                chapter_count++
+            }
+
+            try {
+                writer.close()
+            } catch (ignored: IOException) { //empty
+            }
+
             runOnUiThread {
                 txvOutput.text = txvOutput.text.toString() + "\n" + filename + "done..."
             }
