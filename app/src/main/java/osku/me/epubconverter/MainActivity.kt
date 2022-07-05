@@ -31,9 +31,12 @@ import permissions.dispatcher.RuntimePermissions
 import java.io.*
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
 
 @RuntimePermissions
 class MainActivity : AppCompatActivity() {
@@ -354,24 +357,32 @@ class MainActivity : AppCompatActivity() {
                     val ref = chapter_brief.url.substring(chapter_brief.url.indexOf("/", 8))
                     val content_filename = getMD5String(ref)
                     val content_path = Paths.get(novelPath, "dl_contents", content_filename)
-                    try {
-                        val content = IOUtils.toString(content_path.toUri(), StandardCharsets.UTF_8)
-                        val chapter = Gson().fromJson(content, Chapter::class.java)
-                        val cleaned =
-                            Html.fromHtml(chapter.content, FROM_HTML_MODE_LEGACY).toString().trim()
-                                .replace("[\n]{2,}", "\n")
-                        val finalBytes = cleaned.toCharArray()//.toByteArray()
+                    //偶然發現冒號會影響標題判斷，故將其置換掉。
+                    var chapter_name = Regex("[：]{1,}").replace(chapter_brief.name, " ")
 
-                        val outputBytes = finalBytes
+                    try {
                         //write chapter title
-                        writer.write(chapter_brief.name)
+                        writer.write(chapter_name)
                         writer.newLine()
-                        //write chapter content
-                        writer.write(outputBytes, 0, outputBytes.size)
+
+                        if(content_path.isDirectory()){
+                            //當章節位址是資料夾時，表示該章節分為多個段落，段落以數字為檔名，目前硬性上限設為5個段落。
+                            for(i in 1..5){
+                                val sub = Paths.get(content_path.toString(), i.toString())
+                                if(!sub.isRegularFile())
+                                    break;
+                                val finalBytes = fetchChapterContent(sub)//.toByteArray()
+                                writeChapterContentToOutput(finalBytes, writer, chapter_name)
+                            }
+                        }
+                        else{
+                            val finalBytes = fetchChapterContent(content_path)//.toByteArray()
+                            writeChapterContentToOutput(finalBytes, writer, chapter_name)
+                        }
+
                         writer.newLine()
                         //write line break
                         writer.newLine()
-
                     } catch (io: IOException) {
                         io.printStackTrace()
                         runOnUiThread {
@@ -405,6 +416,31 @@ class MainActivity : AppCompatActivity() {
         } finally {
             runOnUiThread { progressbar.visibility = View.INVISIBLE }
         }
+    }
+
+    private fun writeChapterContentToOutput(
+        finalBytes: CharArray,
+        writer: BufferedWriter,
+        chapter_name: String
+    ) {
+        val outputBytes = finalBytes
+
+        //write chapter content
+        if (!outputBytes[0].equals(' '))
+            writer.write("    ")
+        writer.write(outputBytes, 0, outputBytes.size)
+        writer.newLine()
+    }
+
+    private fun fetchChapterContent(content_path: Path): CharArray {
+        val content = IOUtils.toString(content_path.toUri(), StandardCharsets.UTF_8)
+        val chapter = Gson().fromJson(content, Chapter::class.java)
+        var cleaned =
+            Html.fromHtml(chapter.content, FROM_HTML_MODE_LEGACY).toString().trim()
+        cleaned = Regex("[\\n]{2,}").replace(cleaned, "\n")
+
+        val finalBytes = cleaned.toCharArray()//.toByteArray()
+        return finalBytes
     }
 
     private fun getMD5String(str: String): String? {
